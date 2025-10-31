@@ -1,0 +1,13 @@
+# Local development configuration for the go-key-service
+
+run_mode: "local"
+project_id: "gemini-power-test"
+http_listen_addr: ":8081"
+identity_service_url: "http://localhost:3000" # Assumes the identity service runs on port 3000 locally
+
+cors:
+  allowed_origins:
+    - "http://localhost:3000" # Common for React
+    - "http://localhost:4200" # Common for Angular
+    - "http://localhost:5173" # Common for Vite
+    - "http://localhost:8080" # Common for general dev servers

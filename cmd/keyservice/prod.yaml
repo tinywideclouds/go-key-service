@@ -1,0 +1,10 @@
+# Production configuration for the go-key-service
+
+run_mode: "production"
+project_id: "gemini-power-test" # Must be overridden by GCP_PROJECT_ID env var in prod
+http_listen_addr: ":8081"
+identity_service_url: "http://identity-service.default.svc.cluster.local:3000" # Example for Kubernetes
+
+cors:
+  allowed_origins:
+    - "https://your-frontend-domain.com"
