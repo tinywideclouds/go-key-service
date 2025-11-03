@@ -23,11 +23,11 @@ jobs:
     steps:
       # 1. Get the code
       - name: 'Checkout code'
-        uses: actions/checkout@v4.1.7 # Locked to a specific patch
+        uses: actions/checkout@v4.1.7
 
       # 2. Set up Go
       - name: 'Set up Go'
-        uses: actions/setup-go@v6.0.0 # Locked to a specific patch
+        uses: actions/setup-go@v6.0.0
         with:
           go-version: '1.24'
 
@@ -37,23 +37,26 @@ jobs:
 
       # 4. Log in to GHCR
       - name: 'Log in to GHCR'
-        uses: docker/login-action@v3.6.0 # Locked to a specific patch
+        uses: docker/login-action@v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 5. Install the 'pack' CLI
-      # [FIXED] Use the correct, existing version tag
       - name: 'Install Pack CLI'
         uses: buildpacks/github-actions/setup-pack@v5.9.6
 
       # 6. Build and Push image using Buildpacks
+      # [THE FIX]
+      #  --path .                                 <-- Tells pack to use the root (where go.mod is)
+      #  --env GOOGLE_BUILDABLE=...               <-- Tells the builder which main package to build
       - name: 'Build and Push Image (SHA)'
         run: |
           pack build ${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --builder gcr.io/buildpacks/builder:v1 \
-            --path ${{ env.MAIN_PACKAGE_PATH }} \
+            --path . \
+            --env GOOGLE_BUILDABLE=${{ env.MAIN_PACKAGE_PATH }} \
             --publish
 
       # 7. Tag and Push 'latest'
