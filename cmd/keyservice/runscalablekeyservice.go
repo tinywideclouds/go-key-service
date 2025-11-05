@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
-	"flag"
+	"fmt" // Added for new dependency functions
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,74 +18,77 @@ import (
 	fs "github.com/tinywideclouds/go-key-service/internal/storage/firestore"
 	"github.com/tinywideclouds/go-key-service/keyservice"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
+	"gopkg.in/yaml.v3"
+
+	// Added for new dependency functions
+	keyservicepkg "github.com/tinywideclouds/go-key-service/pkg/keyservice"
 )
+
+//go:embed local.yaml
+var configFile []byte
 
 func main() {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	ctx := context.Background() // Define context once
+	// --- 1. Load Configuration (I/O Layer) ---
+	var yamlCfg config.YamlConfig
 
-	// --- 1. Load Configuration from YAML ---
-	var configPath string
-	flag.StringVar(&configPath, "config", "./cmd/keyservice/local.yaml", "Path to config file")
-	flag.Parse()
-
-	// 2. LOAD THE CONSOLIDATED CONFIG
-	// This one function now loads YAML, overrides with env vars,
-	// validates required fields (like JWT_SECRET), and maps the CORS struct.
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to load configuration")
+	// I/O Step: Unmarshal the embedded bytes
+	if err := yaml.Unmarshal(configFile, &yamlCfg); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to unmarshal embedded yaml config")
 	}
 
-	// 3. ALL MANUAL CONFIG LOGIC IS DELETED
-	// (No more os.Getenv checks for GCP_PROJECT_ID, IDENTITY_SERVICE_URL, etc.)
-	// (No more manual creation of a separate serviceCfg struct)
+	// 2. Build Base Config (Stage 1: Input to Base Config)
+	baseCfg, err := config.NewConfigFromYaml(&yamlCfg)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to build base configuration from YAML")
+	}
+
+	// 3. Apply Overrides (Stage 2: Logic Application)
+	cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to finalize configuration with environment overrides")
+	}
+
 	logger.Info().Str("run_mode", cfg.RunMode).Msg("Configuration loaded")
 
-	// --- 2. Dependency Injection ---
-	fsClient, err := firestore.NewClient(context.Background(), cfg.ProjectID)
+	// --- 2. Dependency Injection (REFACTORED) ---
+
+	// 2a. Data Store
+	store, err := newDependencies(ctx, cfg, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Str("project_id", cfg.ProjectID).Msg("Failed to create Firestore client")
+		logger.Fatal().Err(err).Msg("Failed to initialize core dependencies")
 	}
 
-	store := fs.New(fsClient, "public-keys")
-	logger.Info().Str("project_id", cfg.ProjectID).Msg("Using Firestore key store")
-
-	// Auth middleware setup (unchanged)
-	sanitizedIdentityURL := strings.Trim(cfg.IdentityServiceURL, "\"")
-	jwksURL, err := middleware.DiscoverAndValidateJWTConfig(sanitizedIdentityURL, "RS256", logger)
+	// 2b. Authentication Middleware
+	authMiddleware, err := newAuthMiddleware(cfg, logger)
 	if err != nil {
-		logger.Warn().Err(err).Msg("JWT configuration validation failed")
-	} else {
-		logger.Info().Msg("VERIFIED JWKS CONFIG")
+		logger.Fatal().Err(err).Msg("Failed to initialize authentication middleware")
 	}
 
-	authMiddleware, err := middleware.NewJWKSAuthMiddleware(jwksURL)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to create auth middleware")
-	}
-
-	// 4. THIS IS THE CLEANUP
-	// We no longer create the old, temporary 'serviceCfg'.
-	// We just pass the main 'cfg' directly into New().
+	// 3. Create Service Instance
+	// --- MODIFIED: Simplified call to New ---
 	service := keyservice.New(cfg, store, authMiddleware, logger)
-	service.SetReady(true)
 
-	// --- 4. Start Service and Handle Shutdown ---
-	// (This section is unchanged)
+	// --- 4. Start Service and Handle Shutdown (MODIFIED) ---
 	errChan := make(chan error, 1)
 	go func() {
 		logger.Info().Str("address", cfg.HTTPListenAddr).Msg("Starting service...")
+		// The service.Start() call now handles its own readiness logic
 		if startErr := service.Start(); startErr != nil && !errors.Is(startErr, http.ErrServerClosed) {
 			errChan <- startErr
 		}
 	}()
+
+	// --- REMOVED: The 'select' block for httpReadyChan is no longer needed here ---
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case err := <-errChan:
-		logger.Fatal().Err(err).Msg("Service failed to start")
+		// This will now catch startup errors *or* runtime errors
+		logger.Fatal().Err(err).Msg("Service failed")
 	case sig := <-quit:
 		logger.Info().Str("signal", sig.String()).Msg("OS signal received, initiating shutdown.")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -95,4 +99,34 @@ func main() {
 			logger.Info().Msg("Service shutdown complete")
 		}
 	}
+}
+
+// newDependencies builds the service's data layer dependencies (Firestore client and the Store).
+func newDependencies(ctx context.Context, cfg *config.Config, logger zerolog.Logger) (keyservicepkg.Store, error) {
+	fsClient, err := firestore.NewClient(ctx, cfg.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Firestore client for project %s: %w", cfg.ProjectID, err)
+	}
+
+	// The collection name should ideally come from config, but is hardcoded here for now.
+	store := fs.New(fsClient, "public-keys")
+	logger.Info().Str("project_id", cfg.ProjectID).Msg("Using Firestore key store")
+	return store, nil
+}
+
+// newAuthMiddleware creates the JWT-validating middleware.
+func newAuthMiddleware(cfg *config.Config, logger zerolog.Logger) (func(http.Handler) http.Handler, error) {
+	sanitizedIdentityURL := strings.Trim(cfg.IdentityServiceURL, "\"")
+	jwksURL, err := middleware.DiscoverAndValidateJWTConfig(sanitizedIdentityURL, "RS256", logger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("JWT configuration validation failed")
+	} else {
+		logger.Info().Msg("VERIFIED JWKS CONFIG")
+	}
+
+	authMiddleware, err := middleware.NewJWKSAuthMiddleware(jwksURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth middleware: %w", err)
+	}
+	return authMiddleware, nil
 }

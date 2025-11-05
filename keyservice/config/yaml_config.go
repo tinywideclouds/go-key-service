@@ -8,30 +8,41 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config defines the *single*, authoritative configuration for the Key Service.
-type Config struct {
-	// Fields loaded from YAML
+// YamlConfig is the structure that mirrors the raw config.yaml file.
+type YamlConfig struct {
 	RunMode            string `yaml:"run_mode"`
 	ProjectID          string `yaml:"project_id"`
 	HTTPListenAddr     string `yaml:"http_listen_addr"`
 	IdentityServiceURL string `yaml:"identity_service_url"`
-
-	Cors struct {
+	Cors               struct {
 		AllowedOrigins []string `yaml:"allowed_origins"`
+		Role           string   `yaml:"cors_role"`
 	} `yaml:"cors"`
-
-	// --- Fields Merged from pkg/keyservice/config.go ---
-
-	// This will be populated by the Cors struct from YAML
-	CorsConfig middleware.CorsConfig `yaml:"-"` // Ignored by YAML
-
-	// This will be populated from the "JWT_SECRET" env var
-	JWTSecret string `yaml:"-"` // Ignored by YAML
 }
 
-// Load reads a YAML file and then overrides fields with
+// NewConfigFromYaml converts the raw unmarshaled data (YamlConfig) into a clean, base Config struct.
+// Stage 1 complete: The Config struct now exists, but without environment overrides.
+func NewConfigFromYaml(baseCfg *YamlConfig) (*Config, error) {
+	// 1. Map and Build initial Config structure
+	cfg := &Config{
+		RunMode:            baseCfg.RunMode,
+		ProjectID:          baseCfg.ProjectID,
+		HTTPListenAddr:     baseCfg.HTTPListenAddr,
+		IdentityServiceURL: baseCfg.IdentityServiceURL,
+		// Map Cors data here since it's a direct YAML-to-Config mapping
+		CorsConfig: middleware.CorsConfig{
+			AllowedOrigins: baseCfg.Cors.AllowedOrigins,
+			Role:           middleware.CorsRole(baseCfg.Cors.Role),
+		},
+	}
+	// Note: JWTSecret is intentionally left blank here, as it's an override/injection point (Stage 2)
+
+	return cfg, nil
+}
+
+// LoadFromFile reads a YAML file and then overrides fields with
 // environment variables using the standard library.
-func Load(path string) (*Config, error) {
+func LoadFromFile(path string) (*Config, error) {
 	// 1. Load from YAML file
 	data, err := os.ReadFile(path)
 	if err != nil {

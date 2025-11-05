@@ -1,6 +1,7 @@
 package keyservice
 
 import (
+	"errors" // <-- ADDED
 	"net/http"
 
 	"github.com/illmade-knight/go-microservice-base/pkg/microservice"
@@ -23,9 +24,12 @@ func New(
 	store keyservice.Store,
 	authMiddleware func(http.Handler) http.Handler, // Accept middleware via DI
 	logger zerolog.Logger,
+	// --- REMOVED: httpReadyChan chan struct{} ---
 ) *Wrapper {
 	// 1. Create the standard base server.
 	baseServer := microservice.NewBaseServer(logger, cfg.HTTPListenAddr)
+
+	// --- REMOVED: baseServer.SetReadyChannel(httpReadyChan) ---
 
 	// 2. Create the service-specific API handlers.
 	apiHandler := &api.API{Store: store, Logger: logger, JWTSecret: cfg.JWTSecret}
@@ -61,4 +65,39 @@ func New(
 		BaseServer: baseServer,
 		logger:     logger,
 	}
+}
+
+// --- ADDED: Start method to encapsulate readiness logic ---
+
+// Start runs the HTTP server and handles the readiness logic.
+func (w *Wrapper) Start() error {
+	// This method now contains the logic that was in main.go
+	errChan := make(chan error, 1)
+	httpReadyChan := make(chan struct{})
+	w.BaseServer.SetReadyChannel(httpReadyChan)
+
+	go func() {
+		if err := w.BaseServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			w.logger.Error().Err(err).Msg("HTTP server failed")
+			errChan <- err
+		}
+		close(errChan)
+	}()
+
+	// Wait for EITHER the server to be ready OR for it to fail on startup
+	select {
+	case <-httpReadyChan:
+		// This channel is closed by BaseServer.Start() *after* net.Listen() succeeds
+		w.logger.Info().Msg("HTTP listener is active.")
+		// Since key-service has no other startup tasks, it's safe to set ready.
+		w.SetReady(true)
+		w.logger.Info().Msg("Service is now ready.")
+
+	case err := <-errChan:
+		// Server failed before it could listen
+		return err
+	}
+
+	// Wait for the server goroutine to exit (which happens on Shutdown)
+	return <-errChan
 }
