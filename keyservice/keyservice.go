@@ -1,15 +1,15 @@
 package keyservice
 
 import (
-	"errors" // <-- ADDED
+	"errors"
 	"net/http"
 
-	"github.com/illmade-knight/go-microservice-base/pkg/microservice"
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
 	"github.com/rs/zerolog"
 	"github.com/tinywideclouds/go-key-service/internal/api"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
 	"github.com/tinywideclouds/go-key-service/pkg/keyservice"
+	"github.com/tinywideclouds/go-microservice-base/pkg/microservice"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
 
 // Wrapper now embeds the BaseServer to inherit standard server functionality.

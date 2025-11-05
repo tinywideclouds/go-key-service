@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
-	"github.com/illmade-knight/go-microservice-base/pkg/response"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
@@ -24,9 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/tinywideclouds/go-key-service/internal/api"      // Import api for context key
-	"github.com/tinywideclouds/go-key-service/keyservice"        // Use the package name
-	"github.com/tinywideclouds/go-key-service/keyservice/config" // <-- Use new config
+	"github.com/tinywideclouds/go-key-service/internal/api"
+	"github.com/tinywideclouds/go-key-service/keyservice"
+	"github.com/tinywideclouds/go-key-service/keyservice/config"
+
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
+	"github.com/tinywideclouds/go-microservice-base/pkg/response"
 
 	// --- V2 Imports ---
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"

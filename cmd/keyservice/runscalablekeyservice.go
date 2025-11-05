@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
 	"github.com/rs/zerolog"
 	fs "github.com/tinywideclouds/go-key-service/internal/storage/firestore"
 	"github.com/tinywideclouds/go-key-service/keyservice"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"gopkg.in/yaml.v3"
 
 	// Added for new dependency functions

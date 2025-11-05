@@ -164,8 +164,6 @@ github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aN
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 h1:8Tjv8EJ+pM1xP8mK6egEbD1OgnVTyacbefKhmbLhIhU=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2/go.mod h1:pkJQ2tZHJ0aFOVEEot6oZmaVEZcRme73eIFmhiVuRWs=
-github.com/illmade-knight/go-microservice-base v0.0.7 h1:D5BLT7C5TLKGi0oCG0Ti7YhcU5sOwJHhR+3t0IyBSwQ=
-github.com/illmade-knight/go-microservice-base v0.0.7/go.mod h1:F+1Y+rh7/7dxHDTY5XXYN7YwCeBz+MKL5iYUkAb6QMk=
 github.com/illmade-knight/go-test v0.0.6 h1:a1snqy0GIEfnlrKg9u4X9gmMN7rNIgWRuDI+V5nlHes=
 github.com/illmade-knight/go-test v0.0.6/go.mod h1:lxtdPQYpGXVyyUvm59/ZCcYCS4UYvbqaRne0uTbtqOs=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
@@ -276,6 +274,8 @@ github.com/testcontainers/testcontainers-go v0.38.0 h1:d7uEapLcv2P8AvH8ahLqDMMxd
 github.com/testcontainers/testcontainers-go v0.38.0/go.mod h1:C52c9MoHpWO+C4aqmgSU+hxlR5jlEayWtgYrb8Pzz1w=
 github.com/tinywideclouds/gen-platform v0.0.2 h1:fvwPzy4FM5Gc+FxrGOoFDyYC2vFGT+AEX1UovTid7dY=
 github.com/tinywideclouds/gen-platform v0.0.2/go.mod h1:COG3BwD4rMgdquKXsTui0nNaI9w/b4hbgmBVDOjwGqg=
+github.com/tinywideclouds/go-microservice-base v0.0.1 h1:IaoRxjg/anhbrV3NG0T3v1iBWAZRlqNtavup8HWYUf8=
+github.com/tinywideclouds/go-microservice-base v0.0.1/go.mod h1:wmPQFHoVzwbdZxIklNk3wXz2/CGUjdvTmOqAAzSXm1g=
 github.com/tinywideclouds/go-platform v0.0.5 h1:vRexOezAv9JjDDBD+mP5LfQi7bIts5BG6jg3qlViaM0=
 github.com/tinywideclouds/go-platform v0.0.5/go.mod h1:v5SPJs5Hx+0JPJk2axiHmnISkE7SDWt/JcBD5QT/2Yo=
 github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFAEVmqU=

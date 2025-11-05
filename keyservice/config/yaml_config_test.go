@@ -4,11 +4,11 @@ package config_test
 import (
 	"testing"
 
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	// Import the package we are testing
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
 
 func TestNewConfigFromYaml(t *testing.T) {

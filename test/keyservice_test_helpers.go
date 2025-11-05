@@ -5,12 +5,12 @@ import (
 	"net/http/httptest"
 
 	"cloud.google.com/go/firestore"
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
 	"github.com/rs/zerolog"
 	fs "github.com/tinywideclouds/go-key-service/internal/storage/firestore"
 	inmemorystore "github.com/tinywideclouds/go-key-service/internal/storage/inmemory"
 	"github.com/tinywideclouds/go-key-service/keyservice"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
 
 // NewTestServer creates and starts a new httptest.Server for end-to-end testing.

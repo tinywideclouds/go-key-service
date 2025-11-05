@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"gopkg.in/yaml.v3"
 )
 

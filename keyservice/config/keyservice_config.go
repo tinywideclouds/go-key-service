@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/illmade-knight/go-microservice-base/pkg/middleware"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
 
 // Config defines the *single*, authoritative configuration for the Key Service.
@@ -48,7 +48,7 @@ func UpdateConfigWithEnvOverrides(cfg *Config) (*Config, error) {
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET environment variable is not set or is empty")
 	}
-	
+
 	// 3. Final Post-processing (CORS role cleanup if needed, but assumed done in Stage 1)
 
 	return cfg, nil
