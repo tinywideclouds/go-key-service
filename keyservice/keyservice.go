@@ -2,9 +2,10 @@ package keyservice
 
 import (
 	"errors"
+	"log/slog" // IMPORTED
 	"net/http"
 
-	"github.com/rs/zerolog"
+	// "github.com/rs/zerolog" // REMOVED
 	"github.com/tinywideclouds/go-key-service/internal/api"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
 	"github.com/tinywideclouds/go-key-service/pkg/keyservice"
@@ -15,7 +16,7 @@ import (
 // Wrapper now embeds the BaseServer to inherit standard server functionality.
 type Wrapper struct {
 	*microservice.BaseServer
-	logger zerolog.Logger
+	logger *slog.Logger // CHANGED
 }
 
 // New creates and wires up the entire key service.
@@ -23,22 +24,22 @@ func New(
 	cfg *config.Config,
 	store keyservice.Store,
 	authMiddleware func(http.Handler) http.Handler, // Accept middleware via DI
-	logger zerolog.Logger,
+	logger *slog.Logger, // CHANGED
 	// --- REMOVED: httpReadyChan chan struct{} ---
 ) *Wrapper {
 	// 1. Create the standard base server.
-	baseServer := microservice.NewBaseServer(logger, cfg.HTTPListenAddr)
+	baseServer := microservice.NewBaseServer(logger, cfg.HTTPListenAddr) // CHANGED
 
 	// --- REMOVED: baseServer.SetReadyChannel(httpReadyChan) ---
 
 	// 2. Create the service-specific API handlers.
-	apiHandler := &api.API{Store: store, Logger: logger, JWTSecret: cfg.JWTSecret}
+	apiHandler := &api.API{Store: store, Logger: logger, JWTSecret: cfg.JWTSecret} // CHANGED
 
 	// 3. Get the mux from the base server and register routes.
 	mux := baseServer.Mux()
 
 	// 4. Create CORS middleware from the config.
-	corsMiddleware := middleware.NewCorsMiddleware(cfg.CorsConfig)
+	corsMiddleware := middleware.NewCorsMiddleware(cfg.CorsConfig, logger) // CHANGED
 
 	// --- 5. Register V1 API Routes (Unchanged) ---
 	v1StoreKeyHandler := http.HandlerFunc(apiHandler.StoreKeyHandler)
@@ -78,7 +79,7 @@ func (w *Wrapper) Start() error {
 
 	go func() {
 		if err := w.BaseServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			w.logger.Error().Err(err).Msg("HTTP server failed")
+			w.logger.Error("HTTP server failed", "err", err) // CHANGED
 			errChan <- err
 		}
 		close(errChan)
@@ -88,10 +89,10 @@ func (w *Wrapper) Start() error {
 	select {
 	case <-httpReadyChan:
 		// This channel is closed by BaseServer.Start() *after* net.Listen() succeeds
-		w.logger.Info().Msg("HTTP listener is active.")
+		w.logger.Info("HTTP listener is active.") // CHANGED
 		// Since key-service has no other startup tasks, it's safe to set ready.
 		w.SetReady(true)
-		w.logger.Info().Msg("Service is now ready.")
+		w.logger.Info("Service is now ready.") // CHANGED
 
 	case err := <-errChan:
 		// Server failed before it could listen

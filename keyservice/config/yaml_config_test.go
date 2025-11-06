@@ -12,6 +12,8 @@ import (
 )
 
 func TestNewConfigFromYaml(t *testing.T) {
+	logger := newTestLogger() // ADDED
+
 	t.Run("Success - maps all fields correctly from YAML struct", func(t *testing.T) {
 		// Arrange
 		// This simulates the raw struct after unmarshaling the YAML file
@@ -31,7 +33,7 @@ func TestNewConfigFromYaml(t *testing.T) {
 
 		// Act
 		// This is the "Stage 1" function (now called as config.NewConfigFromYaml)
-		cfg, err := config.NewConfigFromYaml(yamlCfg)
+		cfg, err := config.NewConfigFromYaml(yamlCfg, logger) // CHANGED
 
 		// Assert
 		require.NoError(t, err)

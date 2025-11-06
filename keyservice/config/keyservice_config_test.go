@@ -2,6 +2,8 @@
 package config_test
 
 import (
+	"io"       // IMPORTED
+	"log/slog" // IMPORTED
 	"os"
 	"testing"
 
@@ -24,7 +26,13 @@ func newBaseConfig() *config.Config {
 	}
 }
 
+// newTestLogger creates a discard logger for tests.
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func TestUpdateConfigWithEnvOverrides(t *testing.T) {
+	logger := newTestLogger() // ADDED
 
 	t.Run("Success - All overrides applied", func(t *testing.T) {
 		// Arrange
@@ -37,7 +45,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 
 		// Act
 		// This is the "Stage 2" function (now called as config.UpdateConfigWithEnvOverrides)
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg)
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
 
 		// Assert
 		require.NoError(t, err)
@@ -65,7 +73,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 		t.Setenv("JWT_SECRET", "my-secret-key-from-env")
 
 		// Act
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg)
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
 
 		// Assert
 		require.NoError(t, err)
@@ -90,7 +98,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 		t.Setenv("GCP_PROJECT_ID", "env-project-override")
 
 		// Act
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg)
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
 
 		// Assert
 		assert.Error(t, err)

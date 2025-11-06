@@ -1,6 +1,8 @@
 package test
 
 import (
+	"io"       // IMPORTED
+	"log/slog" // IMPORTED
 	"net/http"
 	"net/http/httptest"
 
@@ -47,9 +49,9 @@ func NewTestKeyService(
 			Role:           middleware.CorsRoleDefault,
 		},
 	}
-	logger := zerolog.Nop()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	store := fs.New(fsClient, collectionName)
+	store := fs.NewFirestoreStore(fsClient, collectionName, logger)
 
 	service := keyservice.New(cfg, store, authMiddleware, logger)
 	server := httptest.NewServer(service.Mux())

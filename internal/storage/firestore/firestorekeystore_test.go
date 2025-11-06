@@ -10,6 +10,8 @@ package firestore_test
 
 import (
 	"context"
+	"io"       // IMPORTED
+	"log/slog" // IMPORTED
 	"testing"
 	"time"
 
@@ -25,6 +27,11 @@ import (
 	"github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
 
+// newTestLogger creates a discard logger for tests.
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 // setupSuite initializes a Firestore emulator and a new Store for testing.
 func setupSuite(t *testing.T) (context.Context, *firestore.Client, keyservice.Store) {
 	t.Helper()
@@ -35,12 +42,14 @@ func setupSuite(t *testing.T) (context.Context, *firestore.Client, keyservice.St
 	const projectID = "test-project-keystore"
 	const collectionName = "public-keys"
 
+	logger := newTestLogger() // ADDED
+
 	firestoreConn := emulators.SetupFirestoreEmulator(t, ctx, emulators.GetDefaultFirestoreConfig(projectID))
 	fsClient, err := firestore.NewClient(context.Background(), projectID, firestoreConn.ClientOptions...)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = fsClient.Close() })
 
-	store := fsAdapter.New(fsClient, collectionName)
+	store := fsAdapter.New(fsClient, collectionName, logger) // CHANGED
 
 	return ctx, fsClient, store
 }

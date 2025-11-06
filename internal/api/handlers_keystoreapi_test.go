@@ -11,12 +11,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"       // IMPORTED
+	"log/slog" // IMPORTED
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/rs/zerolog"
+	// "github.com/rs/zerolog" // REMOVED
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -68,10 +70,15 @@ func (m *MockStore) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.
 	return args.Get(0).(keys.PublicKeys), args.Error(1)
 }
 
+// newTestLogger creates a discard logger for tests.
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 // --- V1 Tests (Complete) ---
 
 func TestStoreKeyHandler_V1(t *testing.T) {
-	logger := zerolog.Nop()
+	logger := newTestLogger() // CHANGED
 	authedUserID := "authed-user-123"
 	userURN, err := urn.New(urn.SecureMessaging, "user", authedUserID)
 	require.NoError(t, err)
@@ -82,7 +89,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 		keyPayload := []byte("my-public-key-blob")
 		mockStore.On("StoreKey", mock.Anything, userURN, keyPayload).Return(nil)
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+userURN.String(), bytes.NewBuffer(keyPayload))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject the authenticated user ID into the context
@@ -100,7 +107,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 	t.Run("Failure - 401 Unauthorized (No Context)", func(t *testing.T) {
 		// Arrange
 		mockStore := new(MockStore)
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+userURN.String(), bytes.NewBufferString("key"))
 		req.SetPathValue("entityURN", userURN.String())
 		rr := httptest.NewRecorder()
@@ -116,7 +123,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 	t.Run("Failure - 403 Forbidden (Mismatch User)", func(t *testing.T) {
 		// Arrange
 		mockStore := new(MockStore)
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+userURN.String(), bytes.NewBufferString("key"))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject a *different* user ID into the context
@@ -134,7 +141,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 	t.Run("Failure - 400 Bad URN", func(t *testing.T) {
 		// Arrange
 		mockStore := new(MockStore)
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		// URN in path is invalid
 		req := httptest.NewRequest(http.MethodPost, "/keys/urn:sm:user", bytes.NewBufferString("key"))
 		req.SetPathValue("entityURN", "urn:sm:user")
@@ -151,7 +158,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 }
 
 func TestGetKeyHandler_V1(t *testing.T) {
-	logger := zerolog.Nop()
+	logger := newTestLogger() // CHANGED
 	testURN, err := urn.New(urn.SecureMessaging, "user", "user-123")
 	require.NoError(t, err)
 
@@ -161,7 +168,7 @@ func TestGetKeyHandler_V1(t *testing.T) {
 		mockStore := new(MockStore)
 		mockStore.On("GetKey", mock.Anything, testURN).Return(mockKey, nil)
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodGet, "/keys/"+testURN.String(), nil)
 		req.SetPathValue("entityURN", testURN.String())
 		rr := httptest.NewRecorder()
@@ -183,7 +190,7 @@ func TestGetKeyHandler_V1(t *testing.T) {
 		mockStore := new(MockStore)
 		mockStore.On("GetKey", mock.Anything, notFoundURN).Return(nil, errors.New("not found"))
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodGet, "/keys/"+notFoundURN.String(), nil)
 		req.SetPathValue("entityURN", notFoundURN.String())
 		rr := httptest.NewRecorder()
@@ -204,7 +211,7 @@ func TestGetKeyHandler_V1(t *testing.T) {
 // --- V2 Tests (NEW) ---
 
 func TestStorePublicKeysHandler_V2(t *testing.T) {
-	logger := zerolog.Nop()
+	logger := newTestLogger() // CHANGED
 	authedUserID := "authed-v2-user"
 	userURN, err := urn.New(urn.SecureMessaging, "user", authedUserID)
 	require.NoError(t, err)
@@ -225,7 +232,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 		// We assert that the store is called with the *native* Go struct
 		mockStore.On("StorePublicKeys", mock.Anything, userURN, mockKeys).Return(nil)
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(mockBodyJSON))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject the authenticated user ID into the context
@@ -242,8 +249,8 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 
 	t.Run("Failure - 401 Unauthorized (No Context)", func(t *testing.T) {
 		// Arrange
-		mockStore := new(MockStore) // No calls expected
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		mockStore := new(MockStore)                              // No calls expected
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(mockBodyJSON))
 		req.SetPathValue("entityURN", userURN.String())
 		rr := httptest.NewRecorder()
@@ -258,8 +265,8 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 
 	t.Run("Failure - 403 Forbidden (Mismatch User)", func(t *testing.T) {
 		// Arrange
-		mockStore := new(MockStore) // No calls expected
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		mockStore := new(MockStore)                              // No calls expected
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(mockBodyJSON))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject a *different* user ID into the context
@@ -276,8 +283,8 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 
 	t.Run("Failure - 400 Bad JSON", func(t *testing.T) {
 		// Arrange
-		mockStore := new(MockStore) // No calls expected
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		mockStore := new(MockStore)                              // No calls expected
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(`{"bad-json`))
 		req.SetPathValue("entityURN", userURN.String())
 		ctx := api.ContextWithUserID(context.Background(), authedUserID)
@@ -293,8 +300,8 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 
 	t.Run("Failure - 400 Missing Keys", func(t *testing.T) {
 		// Arrange
-		mockStore := new(MockStore) // No calls expected
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		mockStore := new(MockStore)                              // No calls expected
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		// Valid JSON, but sigKey is missing
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(`{"encKey":"AQID"}`))
 		req.SetPathValue("entityURN", userURN.String())
@@ -312,7 +319,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 }
 
 func TestGetPublicKeysHandler_V2(t *testing.T) {
-	logger := zerolog.Nop()
+	logger := newTestLogger() // CHANGED
 	userURN, err := urn.New(urn.SecureMessaging, "user", "test-user-v2")
 	require.NoError(t, err)
 
@@ -331,7 +338,7 @@ func TestGetPublicKeysHandler_V2(t *testing.T) {
 		mockStore := new(MockStore)
 		mockStore.On("GetPublicKeys", mock.Anything, userURN).Return(mockKeys, nil)
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodGet, "/api/v2/keys/"+userURN.String(), nil)
 		req.SetPathValue("entityURN", userURN.String())
 		rr := httptest.NewRecorder()
@@ -353,7 +360,7 @@ func TestGetPublicKeysHandler_V2(t *testing.T) {
 		// We must return the zero-value for keys.PublicKeys
 		mockStore.On("GetPublicKeys", mock.Anything, userURN).Return(keys.PublicKeys{}, errors.New("not found"))
 
-		apiHandler := &api.API{Store: mockStore, Logger: logger}
+		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodGet, "/api/v2/keys/"+userURN.String(), nil)
 		req.SetPathValue("entityURN", userURN.String())
 		rr := httptest.NewRecorder()

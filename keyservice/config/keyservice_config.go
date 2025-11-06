@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog" // IMPORTED
 	"os"
 
 	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
@@ -31,25 +32,31 @@ type Config struct {
 // UpdateConfigWithEnvOverrides takes the base configuration (created from YAML)
 // and completes it by applying environment variables and final validation.
 // Stage 2 complete: The final runtime Config is created.
-func UpdateConfigWithEnvOverrides(cfg *Config) (*Config, error) {
+func UpdateConfigWithEnvOverrides(cfg *Config, logger *slog.Logger) (*Config, error) { // CHANGED
+	logger.Debug("Applying environment variable overrides...") // ADDED
+
 	// 1. Apply Environment Overrides (Independent of YAML structure)
 	if projectID := os.Getenv("GCP_PROJECT_ID"); projectID != "" {
+		logger.Debug("Overriding config value", "key", "GCP_PROJECT_ID", "source", "env") // ADDED
 		cfg.ProjectID = projectID
 	}
 	if idURL := os.Getenv("IDENTITY_SERVICE_URL"); idURL != "" {
+		logger.Debug("Overriding config value", "key", "IDENTITY_SERVICE_URL", "source", "env") // ADDED
 		cfg.IdentityServiceURL = idURL
 	}
 	// JWT Secret is exclusively environment-sourced
 	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
+		logger.Debug("Loaded config value", "key", "JWT_SECRET", "source", "env") // ADDED
 		cfg.JWTSecret = jwtSecret
 	}
 
 	// 2. Final Validation
 	if cfg.JWTSecret == "" {
+		logger.Error("Final config validation failed", "error", "JWT_SECRET is not set") // ADDED
 		return nil, fmt.Errorf("JWT_SECRET environment variable is not set or is empty")
 	}
 
 	// 3. Final Post-processing (CORS role cleanup if needed, but assumed done in Stage 1)
-
+	logger.Debug("Configuration finalized and validated successfully") // ADDED
 	return cfg, nil
 }

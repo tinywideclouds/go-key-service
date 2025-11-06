@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"io"
+	"log/slog" // IMPORTED
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +19,7 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/rs/zerolog"
+	// "github.com/rs/zerolog" // REMOVED
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,11 @@ import (
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
 	"github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
+
+// newTestLogger creates a discard logger for tests.
+func newTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 // --- MockStore (Corrected) ---
 type MockStore struct {
@@ -101,17 +107,19 @@ func createTestToken(t *testing.T, privateKey *rsa.PrivateKey, userID string) st
 // newMockAuthMiddleware simulates a working auth middleware.
 // It parses the token (without verification) to get the "sub" claim
 // and injects it into the context, just as the real middleware would.
-func newMockAuthMiddleware(t *testing.T) func(http.Handler) http.Handler {
+func newMockAuthMiddleware(t *testing.T, logger *slog.Logger) func(http.Handler) http.Handler { // CHANGED
 	t.Helper()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
+				logger.Debug("MockAuth: Missing token") // ADDED
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Missing token")
 				return
 			}
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			if tokenString == authHeader {
+				logger.Debug("MockAuth: Invalid token format") // ADDED
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid token format")
 				return
 			}
@@ -119,11 +127,13 @@ func newMockAuthMiddleware(t *testing.T) func(http.Handler) http.Handler {
 			// Parse the token insecurely *just for this test* to get the subject
 			token, err := jwt.ParseInsecure([]byte(tokenString))
 			if err != nil {
+				logger.Debug("MockAuth: Invalid token", "err", err) // ADDED
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid token")
 				return
 			}
 			userID := token.Subject()
 			if userID == "" {
+				logger.Debug("MockAuth: Invalid user ID in token") // ADDED
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid user ID in token")
 				return
 			}
@@ -139,7 +149,7 @@ func newMockAuthMiddleware(t *testing.T) func(http.Handler) http.Handler {
 
 func TestKeyService_Integration(t *testing.T) {
 	// 1. Setup shared resources
-	logger := zerolog.Nop()
+	logger := newTestLogger() // CHANGED
 	// We still need the key to *sign* tokens, even if we don't verify them
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
@@ -159,10 +169,10 @@ func TestKeyService_Integration(t *testing.T) {
 	}
 
 	// 5. Create Auth Middleware (using our new mock)
-	authMiddleware := newMockAuthMiddleware(t)
+	authMiddleware := newMockAuthMiddleware(t, logger) // CHANGED
 
 	// 6. Create the service with the new config
-	service := keyservice.New(cfg, mockStore, authMiddleware, logger)
+	service := keyservice.New(cfg, mockStore, authMiddleware, logger) // CHANGED
 
 	// 7. Start the service
 	keyServiceServer := httptest.NewServer(service.Mux())
@@ -173,7 +183,7 @@ func TestKeyService_Integration(t *testing.T) {
 	t.Run("V1_StoreKey - Success 201", func(t *testing.T) {
 		// Arrange
 		testURN, _ := urn.New(urn.SecureMessaging, "user", "user-123")
-		token := createTestToken(t, privateKey, "user-123")
+		token := createTestToken(t, privateKey, "user-1Two-Factor Authentication: 2-Step Verification - Google Account3")
 		keyPayload := []byte("my-public-key-v1")
 
 		mockStore.On("StoreKey", mock.Anything, testURN, keyPayload).Return(nil).Once()

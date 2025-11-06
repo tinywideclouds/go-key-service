@@ -11,13 +11,14 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"log/slog" // IMPORTED
 
 	"cloud.google.com/go/firestore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
-	"github.com/tinywideclouds/go-platform/pkg/net/v1"
+	urn "github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
 
 // v1KeyDocument is the structure stored in a Firestore document for the V1 API.
@@ -37,13 +38,15 @@ type v2KeyDocument struct {
 type Store struct {
 	client     *firestore.Client
 	collection *firestore.CollectionRef
+	logger     *slog.Logger // ADDED
 }
 
-// New creates a new Firestore-backed store.
-func New(client *firestore.Client, collectionName string) *Store {
+// NewFirestoreStore creates a new Firestore-backed store.
+func NewFirestoreStore(client *firestore.Client, collectionName string, logger *slog.Logger) *Store { // CHANGED
 	return &Store{
 		client:     client,
 		collection: client.Collection(collectionName),
+		logger:     logger.With("component", "firestore_store", "collection", collectionName), // ADDED
 	}
 }
 
@@ -53,30 +56,41 @@ func New(client *firestore.Client, collectionName string) *Store {
 func (s *Store) StoreKey(ctx context.Context, entityURN urn.URN, key []byte) error {
 	entityKey := entityURN.String()
 	doc := s.collection.Doc(entityKey)
+
+	s.logger.Debug("Storing V1 key", "key", entityKey) // ADDED
+
 	// Uses the v1KeyDocument struct
 	_, err := doc.Set(ctx, v1KeyDocument{PublicKey: key})
 	if err != nil {
+		s.logger.Error("Failed to store V1 key", "key", entityKey, "err", err) // ADDED
 		return fmt.Errorf("failed to store v1 key for entity %s: %w", entityKey, err)
 	}
+	s.logger.Debug("Successfully stored V1 key", "key", entityKey) // ADDED
 	return nil
 }
 
 // GetKey retrieves an entity's public key from a Firestore document (V1).
 func (s *Store) GetKey(ctx context.Context, entityURN urn.URN) ([]byte, error) {
 	entityKey := entityURN.String()
+	s.logger.Debug("Getting V1 key", "key", entityKey) // ADDED
+
 	doc, err := s.collection.Doc(entityKey).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
+			s.logger.Debug("V1 key not found", "key", entityKey) // ADDED
 			return nil, fmt.Errorf("key for entity %s not found", entityKey)
 		}
+		s.logger.Warn("Failed to get V1 key document", "key", entityKey, "err", err) // ADDED
 		return nil, fmt.Errorf("failed to get v1 key for entity %s: %w", entityKey, err)
 	}
 
 	var kd v1KeyDocument
 	if err := doc.DataTo(&kd); err != nil {
+		s.logger.Error("Failed to parse V1 key document", "key", entityKey, "err", err) // ADDED
 		return nil, fmt.Errorf("failed to parse v1 key document for entity %s: %w", entityKey, err)
 	}
 
+	s.logger.Debug("Successfully retrieved V1 key", "key", entityKey) // ADDED
 	return kd.PublicKey, nil
 }
 
@@ -86,6 +100,7 @@ func (s *Store) GetKey(ctx context.Context, entityURN urn.URN) ([]byte, error) {
 func (s *Store) StorePublicKeys(ctx context.Context, entityURN urn.URN, keys keys.PublicKeys) error {
 	entityKey := entityURN.String()
 	doc := s.collection.Doc(entityKey)
+	s.logger.Debug("Storing V2 keys", "key", entityKey) // ADDED
 
 	// Uses the new v2KeyDocument struct
 	v2Doc := v2KeyDocument{
@@ -95,8 +110,10 @@ func (s *Store) StorePublicKeys(ctx context.Context, entityURN urn.URN, keys key
 
 	_, err := doc.Set(ctx, v2Doc)
 	if err != nil {
+		s.logger.Error("Failed to store V2 keys", "key", entityKey, "err", err) // ADDED
 		return fmt.Errorf("failed to store v2 public keys for entity %s: %w", entityKey, err)
 	}
+	s.logger.Debug("Successfully stored V2 keys", "key", entityKey) // ADDED
 	return nil
 }
 
@@ -107,11 +124,15 @@ func (s *Store) StorePublicKeys(ctx context.Context, entityURN urn.URN, keys key
 // with an empty `SigKey`.
 func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.PublicKeys, error) {
 	entityKey := entityURN.String()
+	s.logger.Debug("Getting V2 keys", "key", entityKey) // ADDED
+
 	doc, err := s.collection.Doc(entityKey).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
+			s.logger.Debug("V2 keys not found", "key", entityKey) // ADDED
 			return keys.PublicKeys{}, fmt.Errorf("key for entity %s not found", entityKey)
 		}
+		s.logger.Warn("Failed to get V2 key document", "key", entityKey, "err", err) // ADDED
 		return keys.PublicKeys{}, fmt.Errorf("failed to get key for entity %s: %w", entityKey, err)
 	}
 
@@ -120,6 +141,7 @@ func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.Publ
 	if err := doc.DataTo(&v2Doc); err == nil {
 		// Success: Check if it's a real V2 doc (has non-nil EncKey or SigKey)
 		if v2Doc.EncKey != nil || v2Doc.SigKey != nil {
+			s.logger.Debug("Successfully retrieved V2 keys (V2 format)", "key", entityKey) // ADDED
 			return keys.PublicKeys{
 				EncKey: v2Doc.EncKey,
 				SigKey: v2Doc.SigKey,
@@ -127,11 +149,14 @@ func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.Publ
 		}
 	}
 
+	s.logger.Debug("V2 doc parse failed or was empty, attempting V1 compatibility fallback", "key", entityKey, "err", err) // ADDED
+
 	// If V2 parse failed or resulted in empty struct, try V1
 	var v1Doc v1KeyDocument
 	if err := doc.DataTo(&v1Doc); err == nil {
 		// Success: Found a V1 document
 		if v1Doc.PublicKey != nil {
+			s.logger.Debug("Successfully retrieved V2 keys (V1 fallback)", "key", entityKey) // ADDED
 			// Return it as a V2 struct for compatibility
 			return keys.PublicKeys{
 				EncKey: v1Doc.PublicKey, // V1 key is treated as EncKey
@@ -139,6 +164,8 @@ func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.Publ
 			}, nil
 		}
 	}
+
+	s.logger.Error("Failed to parse key document as V1 or V2", "key", entityKey) // ADDED
 
 	// If we're here, the document was found but couldn't be parsed
 	// as either a V1 or V2 struct.
