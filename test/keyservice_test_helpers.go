@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 
 	"cloud.google.com/go/firestore"
-	"github.com/rs/zerolog"
 	fs "github.com/tinywideclouds/go-key-service/internal/storage/firestore"
 	inmemorystore "github.com/tinywideclouds/go-key-service/internal/storage/inmemory"
 	"github.com/tinywideclouds/go-key-service/keyservice"
@@ -27,7 +26,7 @@ func NewTestServer(authMiddleware func(http.Handler) http.Handler) *httptest.Ser
 		},
 	}
 	store := inmemorystore.New()
-	logger := zerolog.Nop()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	service := keyservice.New(cfg, store, authMiddleware, logger)
 	server := httptest.NewServer(service.Mux())

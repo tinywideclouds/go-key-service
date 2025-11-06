@@ -49,7 +49,7 @@ func setupSuite(t *testing.T) (context.Context, *firestore.Client, keyservice.St
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = fsClient.Close() })
 
-	store := fsAdapter.New(fsClient, collectionName, logger) // CHANGED
+	store := fsAdapter.NewFirestoreStore(fsClient, collectionName, logger) // CHANGED
 
 	return ctx, fsClient, store
 }

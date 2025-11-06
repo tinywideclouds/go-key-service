@@ -149,7 +149,7 @@ func newAuthMiddleware(cfg *config.Config, logger *slog.Logger) (func(http.Handl
 	sanitizedIdentityURL := strings.Trim(cfg.IdentityServiceURL, "\"")
 	logger.Debug("Discovering JWT config", "identity_url", sanitizedIdentityURL) // ADDED
 
-	jwksURL, err := middleware.DiscoverAndValidateJWTConfig(sanitizedIdentityURL, "RS256", logger) // CHANGED
+	jwksURL, err := middleware.DiscoverAndValidateJWTConfig(sanitizedIdentityURL, middleware.RSA256, logger) // CHANGED
 	if err != nil {
 		logger.Warn("JWT configuration validation failed. This may be fatal if auth is required.", "err", err) // CHANGED
 		// We still try to start, but log the warning.
