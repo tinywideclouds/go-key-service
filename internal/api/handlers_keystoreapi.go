@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json" // <-- Use standard JSON library
 	"io"
 	"log/slog" // IMPORTED
@@ -9,6 +8,7 @@ import (
 
 	// "github.com/rs/zerolog" // REMOVED
 	"github.com/tinywideclouds/go-key-service/pkg/keyservice"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"github.com/tinywideclouds/go-microservice-base/pkg/response"
 
 	// --- V2 Imports ---
@@ -24,29 +24,12 @@ type API struct {
 	JWTSecret string
 }
 
-type contextKey string
-
-// UserContextKey is the key used to store the authenticated user's ID from the JWT.
-const UserContextKey contextKey = "userID"
-
-// GetUserIDFromContext safely retrieves the user ID from the request context.
-func GetUserIDFromContext(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(UserContextKey).(string)
-	return userID, ok
-}
-
-// ContextWithUserID is a helper function for tests to inject a user ID
-// into a context, simulating a successful authentication from middleware.
-func ContextWithUserID(ctx context.Context, userID string) context.Context {
-	return context.WithValue(ctx, UserContextKey, userID)
-}
-
 // --- V1 API Handlers (Unchanged) ---
 
 // StoreKeyHandler manages the POST requests for entity keys (V1).
 func (a *API) StoreKeyHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Get the authenticated user's ID securely from the JWT context.
-	authedUserID, ok := GetUserIDFromContext(r.Context())
+	authedUserID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
 		a.Logger.Debug("V1 StoreKey: Failed. No user ID in token context.") // ADDED
 		response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: No user ID in token")
@@ -62,11 +45,13 @@ func (a *API) StoreKeyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger := a.Logger.With("entity_urn", entityURN.String()) // CHANGED
+	entityString := entityURN.String()
+
+	logger := a.Logger.With("entity_urn", entityString) // CHANGED
 
 	// 3. Enforce: User can only store their own key.
-	if entityURN.EntityID() != authedUserID {
-		logger.Warn("V1 StoreKey: Forbidden. User tried to store key for another entity", "authed_user", authedUserID) // CHANGED
+	if entityString != authedUserID {
+		logger.Warn("V1 StoreKey: Forbidden. User tried to store key for another entity", "authed_user", authedUserID, "entityURN", entityString) // CHANGED
 		response.WriteJSONError(w, http.StatusForbidden, "Forbidden: You can only store your own key")
 		return
 	}
@@ -122,7 +107,7 @@ func (a *API) GetKeyHandler(w http.ResponseWriter, r *http.Request) {
 // StorePublicKeysHandler manages the POST requests for V2 PublicKeys.
 func (a *API) StorePublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Auth: Get the authenticated user's ID from the JWT context.
-	authedUserID, ok := GetUserIDFromContext(r.Context())
+	authedUserID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
 		a.Logger.Debug("V2 StoreKeys: Failed. No user ID in token context.") // ADDED
 		response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: No user ID in token")
@@ -138,11 +123,12 @@ func (a *API) StorePublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger := a.Logger.With("entity_urn", entityURN.String()) // CHANGED
+	entityString := entityURN.String()
+	logger := a.Logger.With("entity_urn", entityString) // CHANGED
 
 	// 3. Authz: User can only store their own key.
-	if entityURN.EntityID() != authedUserID {
-		logger.Warn("V2 StoreKeys: Forbidden. User tried to store key for another entity", "authed_user", authedUserID) // CHANGED
+	if entityString != authedUserID {
+		logger.Warn("V2 StoreKeys: Forbidden. User tried to store key for another entity", "authed_user", authedUserID, "entity_urn", entityString) // CHANGED
 		response.WriteJSONError(w, http.StatusForbidden, "Forbidden: You can only store your own key")
 		return
 	}

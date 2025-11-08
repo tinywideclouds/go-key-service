@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	// "github.com/rs/zerolog" // REMOVED
 	fs "github.com/tinywideclouds/go-key-service/internal/storage/firestore"
 	"github.com/tinywideclouds/go-key-service/keyservice"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
@@ -50,6 +49,8 @@ func main() {
 	}))
 	slog.SetDefault(logger) // Set as the global default
 	// --- END REFACTOR ---
+
+	logger.Info("Starting Key Service", "logLevel", logLevel)
 
 	ctx := context.Background() // Define context once
 	// --- 1. Load Configuration (I/O Layer) ---

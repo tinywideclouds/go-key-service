@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/tinywideclouds/go-key-service/internal/api"
+	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"github.com/tinywideclouds/go-microservice-base/pkg/response"
 
 	// --- V2 Imports ---
@@ -93,7 +94,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+userURN.String(), bytes.NewBuffer(keyPayload))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject the authenticated user ID into the context
-		ctx := api.ContextWithUserID(context.Background(), authedUserID)
+		ctx := middleware.ContextWithUserID(context.Background(), authedUserID)
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -127,7 +128,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+userURN.String(), bytes.NewBufferString("key"))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject a *different* user ID into the context
-		ctx := api.ContextWithUserID(context.Background(), "some-other-user")
+		ctx := middleware.ContextWithUserID(context.Background(), "some-other-user")
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -145,7 +146,7 @@ func TestStoreKeyHandler_V1(t *testing.T) {
 		// URN in path is invalid
 		req := httptest.NewRequest(http.MethodPost, "/keys/urn:sm:user", bytes.NewBufferString("key"))
 		req.SetPathValue("entityURN", "urn:sm:user")
-		ctx := api.ContextWithUserID(context.Background(), authedUserID)
+		ctx := middleware.ContextWithUserID(context.Background(), authedUserID)
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -236,7 +237,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(mockBodyJSON))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject the authenticated user ID into the context
-		ctx := api.ContextWithUserID(context.Background(), authedUserID)
+		ctx := middleware.ContextWithUserID(context.Background(), authedUserID)
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -270,7 +271,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(mockBodyJSON))
 		req.SetPathValue("entityURN", userURN.String())
 		// Inject a *different* user ID into the context
-		ctx := api.ContextWithUserID(context.Background(), "some-other-user")
+		ctx := middleware.ContextWithUserID(context.Background(), "some-other-user")
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -287,7 +288,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 		apiHandler := &api.API{Store: mockStore, Logger: logger} // CHANGED
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(`{"bad-json`))
 		req.SetPathValue("entityURN", userURN.String())
-		ctx := api.ContextWithUserID(context.Background(), authedUserID)
+		ctx := middleware.ContextWithUserID(context.Background(), authedUserID)
 		rr := httptest.NewRecorder()
 
 		// Act
@@ -305,7 +306,7 @@ func TestStorePublicKeysHandler_V2(t *testing.T) {
 		// Valid JSON, but sigKey is missing
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/keys/"+userURN.String(), strings.NewReader(`{"encKey":"AQID"}`))
 		req.SetPathValue("entityURN", userURN.String())
-		ctx := api.ContextWithUserID(context.Background(), authedUserID)
+		ctx := middleware.ContextWithUserID(context.Background(), authedUserID)
 		rr := httptest.NewRecorder()
 
 		// Act
