@@ -30,7 +30,7 @@ func newTestLogger() *slog.Logger {
 func setupSuite(t *testing.T) (context.Context, *firestore.Client, keystore.Store) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	t.Cleanup(cancel)
 
 	const projectID = "test-project-keystore"

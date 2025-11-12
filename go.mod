@@ -6,7 +6,7 @@ toolchain go1.24.6
 
 require (
 	cloud.google.com/go/firestore v1.20.0
-	github.com/illmade-knight/go-test v0.0.6
+	github.com/illmade-knight/go-test v0.0.10
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/stretchr/testify v1.11.1
 	github.com/tinywideclouds/go-microservice-base v0.0.4
