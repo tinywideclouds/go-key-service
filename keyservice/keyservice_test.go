@@ -1,15 +1,15 @@
+// --- File: keyservice/keyservice_test.go ---
 //go:build integration
 
 package keyservice_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
 	"io"
-	"log/slog" // IMPORTED
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,18 +19,15 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	// "github.com/rs/zerolog" // REMOVED
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/tinywideclouds/go-key-service/internal/api"
 	"github.com/tinywideclouds/go-key-service/keyservice"
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
 
 	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"github.com/tinywideclouds/go-microservice-base/pkg/response"
 
-	// --- V2 Imports ---
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
 	"github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
@@ -40,47 +37,26 @@ func newTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// --- MockStore (Corrected) ---
+// MockStore
 type MockStore struct {
 	mock.Mock
 }
 
-// StoreKey is the mock implementation for storing a key.
-func (m *MockStore) StoreKey(ctx context.Context, entityURN urn.URN, key []byte) error {
-	args := m.Called(ctx, entityURN, key)
-	return args.Error(0)
-}
-
-// GetKey is the mock implementation for retrieving a key.
-func (m *MockStore) GetKey(ctx context.Context, entityURN urn.URN) ([]byte, error) {
-	args := m.Called(ctx, entityURN)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-// StorePublicKeys is the mock implementation for storing a V2 PublicKeys struct.
+// StorePublicKeys is the mock implementation for storing a PublicKeys struct.
 func (m *MockStore) StorePublicKeys(ctx context.Context, entityURN urn.URN, keys keys.PublicKeys) error {
 	args := m.Called(ctx, entityURN, keys)
 	return args.Error(0)
 }
 
-// GetPublicKeys is the mock implementation for retrieving a V2 PublicKeys struct.
-//
-// CORRECTED: This now returns a VALUE (keys.PublicKeys), not a pointer,
-// matching the store.go interface and fixing the panic.
-func (m *MockStore) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.PublicKeys, error) {
-	args := m.Called(ctx, entityURN)
+// GetPublicKeys is the mock implementation for retrieving a PublicKeys struct.
+func (mS *MockStore) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.PublicKeys, error) {
+	args := mS.Called(ctx, entityURN)
 	// Handle nil return for error cases
 	if args.Get(0) == nil {
 		return keys.PublicKeys{}, args.Error(1)
 	}
-	// This assertion is now valid and will not panic.
 	return args.Get(0).(keys.PublicKeys), args.Error(1)
 }
-
-// --- Test Setup Helpers ---
 
 // createTestToken generates a valid JWT signed by the given private key.
 func createTestToken(t *testing.T, privateKey *rsa.PrivateKey, userID string) string {
@@ -103,23 +79,20 @@ func createTestToken(t *testing.T, privateKey *rsa.PrivateKey, userID string) st
 	return string(signedToken)
 }
 
-// --- NEW Mock Auth Middleware ---
 // newMockAuthMiddleware simulates a working auth middleware.
-// It parses the token (without verification) to get the "sub" claim
-// and injects it into the context, just as the real middleware would.
-func newMockAuthMiddleware(t *testing.T, logger *slog.Logger) func(http.Handler) http.Handler { // CHANGED
+func newMockAuthMiddleware(t *testing.T, logger *slog.Logger) func(http.Handler) http.Handler {
 	t.Helper()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				logger.Debug("MockAuth: Missing token") // ADDED
+				logger.Debug("MockAuth: Missing token")
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Missing token")
 				return
 			}
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			if tokenString == authHeader {
-				logger.Debug("MockAuth: Invalid token format") // ADDED
+				logger.Debug("MockAuth: Invalid token format")
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid token format")
 				return
 			}
@@ -127,30 +100,27 @@ func newMockAuthMiddleware(t *testing.T, logger *slog.Logger) func(http.Handler)
 			// Parse the token insecurely *just for this test* to get the subject
 			token, err := jwt.ParseInsecure([]byte(tokenString))
 			if err != nil {
-				logger.Debug("MockAuth: Invalid token", "err", err) // ADDED
+				logger.Debug("MockAuth: Invalid token", "err", err)
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid token")
 				return
 			}
 			userID := token.Subject()
 			if userID == "" {
-				logger.Debug("MockAuth: Invalid user ID in token") // ADDED
+				logger.Debug("MockAuth: Invalid user ID in token")
 				response.WriteJSONError(w, http.StatusUnauthorized, "Unauthorized: Invalid user ID in token")
 				return
 			}
 
-			// Inject the user ID into the context
-			ctx := context.WithValue(r.Context(), api.UserContextKey, userID)
+			// --- FIX: Use the correct middleware helper to inject the user ID ---
+			ctx := middleware.ContextWithUserID(r.Context(), userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// --- Main Test Function ---
-
 func TestKeyService_Integration(t *testing.T) {
 	// 1. Setup shared resources
-	logger := newTestLogger() // CHANGED
-	// We still need the key to *sign* tokens, even if we don't verify them
+	logger := newTestLogger()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
@@ -160,8 +130,7 @@ func TestKeyService_Integration(t *testing.T) {
 	// 3. Create the new consolidated Config
 	cfg := &config.Config{
 		HTTPListenAddr: ":0", // Use :0 for dynamic port
-		// IdentityServiceURL is no longer needed for this test
-		JWTSecret: "not-used-by-mock-auth",
+		JWTSecret:      "not-used-by-mock-auth",
 		CorsConfig: middleware.CorsConfig{
 			AllowedOrigins: []string{"http://test-origin.com"},
 			Role:           middleware.CorsRoleDefault,
@@ -169,26 +138,31 @@ func TestKeyService_Integration(t *testing.T) {
 	}
 
 	// 5. Create Auth Middleware (using our new mock)
-	authMiddleware := newMockAuthMiddleware(t, logger) // CHANGED
+	authMiddleware := newMockAuthMiddleware(t, logger)
 
 	// 6. Create the service with the new config
-	service := keyservice.New(cfg, mockStore, authMiddleware, logger) // CHANGED
+	// --- FIX: Use the new function name ---
+	service := keyservice.NewKeyService(cfg, mockStore, authMiddleware, logger)
 
 	// 7. Start the service
 	keyServiceServer := httptest.NewServer(service.Mux())
 	defer keyServiceServer.Close()
 
-	// --- V1 API Tests (Largely unchanged) ---
-
-	t.Run("V1_StoreKey - Success 201", func(t *testing.T) {
+	t.Run("StoreKeys - Success 201", func(t *testing.T) {
 		// Arrange
-		testURN, _ := urn.New(urn.SecureMessaging, "user", "user-123")
-		token := createTestToken(t, privateKey, "user-1Two-Factor Authentication: 2-Step Verification - Google Account3")
-		keyPayload := []byte("my-public-key-v1")
+		authedUserID := "authed-user"
+		testURN, _ := urn.New(urn.SecureMessaging, "user", authedUserID)
+		token := createTestToken(t, privateKey, authedUserID)
 
-		mockStore.On("StoreKey", mock.Anything, testURN, keyPayload).Return(nil).Once()
+		nativeKeys := keys.PublicKeys{
+			EncKey: []byte{1, 2, 3},
+			SigKey: []byte{4, 5, 6},
+		}
+		jsonBody := `{"encKey":"AQID","sigKey":"BAUG"}`
 
-		req, _ := http.NewRequest(http.MethodPost, keyServiceServer.URL+"/keys/"+testURN.String(), bytes.NewBuffer(keyPayload))
+		mockStore.On("StorePublicKeys", mock.Anything, testURN, nativeKeys).Return(nil).Once()
+
+		req, _ := http.NewRequest(http.MethodPost, keyServiceServer.URL+"/keys/"+testURN.String(), strings.NewReader(jsonBody))
 		req.Header.Set("Authorization", "Bearer "+token)
 
 		// Act
@@ -201,12 +175,38 @@ func TestKeyService_Integration(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("V1_GetKey - Success 200 (public endpoint)", func(t *testing.T) {
+	t.Run("StoreKeys - Failure 403 (Mismatch User)", func(t *testing.T) {
+		// Arrange
+		authedUserID := "authed-user"
+		differentURN, _ := urn.New(urn.SecureMessaging, "user", "different-user")
+		token := createTestToken(t, privateKey, authedUserID)
+		jsonBody := `{"encKey":"AQID","sigKey":"BAUG"}`
+
+		// No store call is expected
+		req, _ := http.NewRequest(http.MethodPost, keyServiceServer.URL+"/keys/"+differentURN.String(), strings.NewReader(jsonBody))
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		// Act
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Assert
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		mockStore.AssertNotCalled(t, "StorePublicKeys")
+	})
+
+	t.Run("GetKeys - Success 200", func(t *testing.T) {
 		// Arrange
 		testURN, _ := urn.New(urn.SecureMessaging, "user", "user-to-get")
-		keyPayload := []byte("the-key-to-find-v1")
 
-		mockStore.On("GetKey", mock.Anything, testURN).Return(keyPayload, nil).Once()
+		nativeKeys := keys.PublicKeys{
+			EncKey: []byte{1, 2, 3},
+			SigKey: []byte{4, 5, 6},
+		}
+		expectedJSON := `{"encKey":"AQID","sigKey":"BAUG"}`
+
+		mockStore.On("GetPublicKeys", mock.Anything, testURN).Return(nativeKeys, nil).Once()
 
 		req, _ := http.NewRequest(http.MethodGet, keyServiceServer.URL+"/keys/"+testURN.String(), nil)
 
@@ -218,102 +218,18 @@ func TestKeyService_Integration(t *testing.T) {
 		// Assert
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
-		assert.Equal(t, keyPayload, body)
-		mockStore.AssertExpectations(t)
-	})
-
-	// --- NEW V2 API Tests ---
-
-	t.Run("V2_StorePublicKeys - Success 201", func(t *testing.T) {
-		// Arrange
-		authedUserID := "authed-v2-user"
-		testURN, _ := urn.New(urn.SecureMessaging, "user", authedUserID)
-		token := createTestToken(t, privateKey, authedUserID)
-
-		nativeKeys := keys.PublicKeys{
-			EncKey: []byte{1, 2, 3},
-			SigKey: []byte{4, 5, 6},
-		}
-		// The JSON body our client will send (camelCase)
-		jsonBody := `{"encKey":"AQID","sigKey":"BAUG"}`
-
-		// We expect the *native* struct to be passed to the store
-		mockStore.On("StorePublicKeys", mock.Anything, testURN, nativeKeys).Return(nil).Once()
-
-		req, _ := http.NewRequest(http.MethodPost, keyServiceServer.URL+"/api/v2/keys/"+testURN.String(), strings.NewReader(jsonBody))
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		// Act
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Assert
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-		mockStore.AssertExpectations(t)
-	})
-
-	t.Run("V2_StorePublicKeys - Failure 403 (Mismatch User)", func(t *testing.T) {
-		// Arrange
-		authedUserID := "authed-v2-user"
-		differentURN, _ := urn.New(urn.SecureMessaging, "user", "different-user")
-		token := createTestToken(t, privateKey, authedUserID) // Token is for 'authed-v2-user'
-		jsonBody := `{"encKey":"AQID","sigKey":"BAUG"}`
-
-		// No store call is expected
-		req, _ := http.NewRequest(http.MethodPost, keyServiceServer.URL+"/api/v2/keys/"+differentURN.String(), strings.NewReader(jsonBody))
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		// Act
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Assert
-		assert.Equal(t, http.StatusForbidden, resp.StatusCode) // This will now pass
-		mockStore.AssertNotCalled(t, "StorePublicKeys")
-	})
-
-	t.Run("V2_GetPublicKeys - Success 200", func(t *testing.T) {
-		// Arrange
-		testURN, _ := urn.New(urn.SecureMessaging, "user", "v2-user-to-get")
-
-		// This is the *native* struct our store will return
-		nativeKeys := keys.PublicKeys{
-			EncKey: []byte{1, 2, 3},
-			SigKey: []byte{4, 5, 6},
-		}
-		// This is the *camelCase* JSON we expect our API to return
-		expectedJSON := `{"encKey":"AQID","sigKey":"BAUG"}`
-
-		// REFACTOR: The mock returns the VALUE, not a pointer
-		mockStore.On("GetPublicKeys", mock.Anything, testURN).Return(nativeKeys, nil).Once()
-
-		req, _ := http.NewRequest(http.MethodGet, keyServiceServer.URL+"/api/v2/keys/"+testURN.String(), nil)
-
-		// Act
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		// Assert
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		body, _ := io.ReadAll(resp.Body)
-		// This test is now valid and robust, as the handler will
-		// call the value-receiver MarshalJSON() method.
 		assert.JSONEq(t, expectedJSON, string(body))
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("V2_GetPublicKeys - Failure 404", func(t *testing.T) {
+	t.Run("GetKeys - Failure 404", func(t *testing.T) {
 		// Arrange
-		testURN, _ := urn.New(urn.SecureMessaging, "user", "v2-user-not-found")
+		testURN, _ := urn.New(urn.SecureMessaging, "user", "user-not-found")
 
-		// REFACTOR: Return the zero-value for keys.PublicKeys
 		mockStore.On("GetPublicKeys", mock.Anything, testURN).Return(keys.PublicKeys{}, errors.New("not found")).Once()
 
-		req, _ := http.NewRequest(http.MethodGet, keyServiceServer.URL+"/api/v2/keys/"+testURN.String(), nil)
+		req, _ := http.NewRequest(http.MethodGet, keyServiceServer.URL+"/keys/"+testURN.String(), nil)
 
 		// Act
 		resp, err := http.DefaultClient.Do(req)

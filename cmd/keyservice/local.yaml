@@ -3,6 +3,7 @@
 run_mode: "local"
 project_id: "gemini-power-test"
 http_listen_addr: ":8081"
+firestore_collection: "public-keys"
 identity_service_url: "http://localhost:3000" # Assumes the identity service runs on port 3000 locally
 
 cors:

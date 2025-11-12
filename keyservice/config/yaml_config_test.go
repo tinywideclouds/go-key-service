@@ -6,13 +6,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	// Import the package we are testing
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
 	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
 
 func TestNewConfigFromYaml(t *testing.T) {
-	logger := newTestLogger() // ADDED
+	logger := newTestLogger()
 
 	t.Run("Success - maps all fields correctly from YAML struct", func(t *testing.T) {
 		// Arrange
@@ -22,6 +21,8 @@ func TestNewConfigFromYaml(t *testing.T) {
 			ProjectID:          "yaml-project-id",
 			HTTPListenAddr:     ":9090",
 			IdentityServiceURL: "http://yaml-identity.com",
+			// This is the fix for the hardcoded value
+			FirestoreCollection: "my-keys-collection",
 			Cors: struct {
 				AllowedOrigins []string `yaml:"allowed_origins"`
 				Role           string   `yaml:"cors_role"`
@@ -32,8 +33,7 @@ func TestNewConfigFromYaml(t *testing.T) {
 		}
 
 		// Act
-		// This is the "Stage 1" function (now called as config.NewConfigFromYaml)
-		cfg, err := config.NewConfigFromYaml(yamlCfg, logger) // CHANGED
+		cfg, err := config.NewConfigFromYaml(yamlCfg, logger)
 
 		// Assert
 		require.NoError(t, err)
@@ -44,6 +44,7 @@ func TestNewConfigFromYaml(t *testing.T) {
 		assert.Equal(t, "yaml-project-id", cfg.ProjectID)
 		assert.Equal(t, ":9090", cfg.HTTPListenAddr)
 		assert.Equal(t, "http://yaml-identity.com", cfg.IdentityServiceURL)
+		assert.Equal(t, "my-keys-collection", cfg.FirestoreCollection)
 
 		// Check that the CORS struct was correctly processed and mapped
 		assert.NotNil(t, cfg.CorsConfig)

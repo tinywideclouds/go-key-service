@@ -2,20 +2,19 @@
 package config_test
 
 import (
-	"io"       // IMPORTED
-	"log/slog" // IMPORTED
+	"io"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	// Import the package we are testing
+
 	"github.com/tinywideclouds/go-key-service/keyservice/config"
 )
 
 // newBaseConfig creates a mock "Stage 1" config,
 // simulating what NewConfigFromYaml would produce.
-// We must now use the exported config.Config type.
 func newBaseConfig() *config.Config {
 	return &config.Config{
 		RunMode:            "base-mode",
@@ -32,7 +31,7 @@ func newTestLogger() *slog.Logger {
 }
 
 func TestUpdateConfigWithEnvOverrides(t *testing.T) {
-	logger := newTestLogger() // ADDED
+	logger := newTestLogger()
 
 	t.Run("Success - All overrides applied", func(t *testing.T) {
 		// Arrange
@@ -44,8 +43,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 		t.Setenv("JWT_SECRET", "my-secret-key-from-env")
 
 		// Act
-		// This is the "Stage 2" function (now called as config.UpdateConfigWithEnvOverrides)
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger)
 
 		// Assert
 		require.NoError(t, err)
@@ -73,7 +71,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 		t.Setenv("JWT_SECRET", "my-secret-key-from-env")
 
 		// Act
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger)
 
 		// Assert
 		require.NoError(t, err)
@@ -98,7 +96,7 @@ func TestUpdateConfigWithEnvOverrides(t *testing.T) {
 		t.Setenv("GCP_PROJECT_ID", "env-project-override")
 
 		// Act
-		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger) // CHANGED
+		cfg, err := config.UpdateConfigWithEnvOverrides(baseCfg, logger)
 
 		// Assert
 		assert.Error(t, err)

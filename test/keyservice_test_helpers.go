@@ -28,7 +28,7 @@ func NewTestServer(authMiddleware func(http.Handler) http.Handler) *httptest.Ser
 	store := inmemorystore.New()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	service := keyservice.New(cfg, store, authMiddleware, logger)
+	service := keyservice.NewKeyService(cfg, store, authMiddleware, logger)
 	server := httptest.NewServer(service.Mux())
 
 	return server
@@ -52,7 +52,7 @@ func NewTestKeyService(
 
 	store := fs.NewFirestoreStore(fsClient, collectionName, logger)
 
-	service := keyservice.New(cfg, store, authMiddleware, logger)
+	service := keyservice.NewKeyService(cfg, store, authMiddleware, logger)
 	server := httptest.NewServer(service.Mux())
 
 	return server
