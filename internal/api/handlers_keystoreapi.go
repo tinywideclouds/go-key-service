@@ -1,4 +1,3 @@
-// --- File: internal/api/handlers_keystoreapi.go ---
 package api
 
 import (
@@ -34,6 +33,9 @@ func (a *API) StoreKeysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NEW: Get the user's Handle (Lookup URN) from the token context
+	authedHandle, _ := middleware.GetUserHandleFromContext(r.Context())
+
 	// 2. Path: Get the URN from the path.
 	entityURNStr := r.PathValue("entityURN")
 	entityURN, err := urn.Parse(entityURNStr)
@@ -46,11 +48,17 @@ func (a *API) StoreKeysHandler(w http.ResponseWriter, r *http.Request) {
 	logger := a.Logger.With("entity_urn", entityURN.String())
 
 	// 3. Authz: User can only store their own key.
-	// --- FIX: Compare the authenticated ID with the URN's ID, not the full URN string. ---
-	if entityURN.EntityID() != authedUserID {
+	// We allow storing keys for the Identity URN (authedUserID)
+	// OR the Handle URN (authedHandle)
+	targetURN := entityURN.String()
+	isIdentityMatch := targetURN == authedUserID
+	isHandleMatch := authedHandle != "" && targetURN == authedHandle
+
+	if !isIdentityMatch && !isHandleMatch {
 		logger.Warn("StoreKeys: Forbidden. User tried to store key for another entity",
-			"authed_user", authedUserID,
-			"target_entity_id", entityURN.EntityID())
+			"authed_user_urn", authedUserID,
+			"authed_handle_urn", authedHandle,
+			"target_entity_urn", targetURN)
 		response.WriteJSONError(w, http.StatusForbidden, "Forbidden: You can only store your own key")
 		return
 	}
