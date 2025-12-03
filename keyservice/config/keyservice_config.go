@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 )
@@ -51,6 +52,24 @@ func UpdateConfigWithEnvOverrides(cfg *Config, logger *slog.Logger) (*Config, er
 	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
 		logger.Debug("Loaded config value", "key", "JWT_SECRET", "source", "env")
 		cfg.JWTSecret = jwtSecret
+	}
+
+	if port := os.Getenv("PORT"); port != "" {
+		logger.Debug("Overriding config value", "key", "PORT", "source", "env")
+		cfg.HTTPListenAddr = ":" + port
+	}
+
+	if corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); corsOrigins != "" {
+		logger.Debug("Overriding config value", "key", "CORS_ALLOWED_ORIGINS", "source", "env")
+		// Split by comma and trim spaces
+		rawOrigins := strings.Split(corsOrigins, ",")
+		var cleanOrigins []string
+		for _, o := range rawOrigins {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				cleanOrigins = append(cleanOrigins, trimmed)
+			}
+		}
+		cfg.CorsConfig.AllowedOrigins = cleanOrigins
 	}
 
 	// 2. Final Validation
