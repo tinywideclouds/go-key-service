@@ -10,7 +10,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/stretchr/testify v1.11.1
 	github.com/tinywideclouds/go-microservice-base v0.0.8
-	github.com/tinywideclouds/go-platform v0.0.7
+	github.com/tinywideclouds/go-platform v0.0.11
 	google.golang.org/grpc v1.76.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -100,7 +100,7 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/testcontainers/testcontainers-go v0.38.0 // indirect
-	github.com/tinywideclouds/gen-platform v0.0.3 // indirect
+	github.com/tinywideclouds/gen-platform v0.0.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect

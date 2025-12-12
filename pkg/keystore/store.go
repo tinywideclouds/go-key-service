@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
-	urn "github.com/tinywideclouds/go-platform/pkg/net/v1"
+	"github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
 
 // Store defines the public interface for key persistence.
