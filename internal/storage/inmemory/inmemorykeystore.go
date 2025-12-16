@@ -4,9 +4,9 @@ package inmemory
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
+	"github.com/tinywideclouds/go-key-service/pkg/keystore"
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
 	"github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
@@ -39,7 +39,7 @@ func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.Publ
 	defer s.RUnlock()
 	keyStruct, ok := s.keys[entityURN.String()]
 	if !ok {
-		return keys.PublicKeys{}, fmt.Errorf("key for entity %s not found", entityURN.String())
+		return keys.PublicKeys{}, keystore.ErrNotFound
 	}
 	return keyStruct, nil
 }

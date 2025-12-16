@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -92,7 +93,6 @@ func (a *API) StoreKeysHandler(w http.ResponseWriter, r *http.Request) {
 // GetKeysHandler handles the GET /keys/{entityURN} request.
 // It retrieves the public keys for a given entity and returns them as JSON.
 func (a *API) GetKeysHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Path: Get the URN from the path.
 	entityURNStr := r.PathValue("entityURN")
 	entityURN, err := urn.Parse(entityURNStr)
 	if err != nil {
@@ -103,15 +103,24 @@ func (a *API) GetKeysHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger := a.Logger.With("entity_urn", entityURN.String())
 
-	// 2. Store: Use the store method to retrieve the Go struct
 	retrievedKeys, err := a.Store.GetPublicKeys(r.Context(), entityURN)
 	if err != nil {
-		logger.Warn("GetKeys: Key not found", "err", err)
-		response.WriteJSONError(w, http.StatusNotFound, "Key not found")
+		// ✅ FIX: The Logic Split
+		if errors.Is(err, keystore.ErrNotFound) {
+			// It is TRULY gone. The frontend is safe to assume it needs to regenerate.
+			logger.Debug("GetKeys: Key not found")
+			response.WriteJSONError(w, http.StatusNotFound, "Key not found")
+			return
+		}
+
+		// It is a SYSTEM error (Cold Start, DB Down).
+		// Return 500 so the frontend SecureKeyService throws an error
+		// and the ChatService STOPS initialization instead of nuking keys.
+		logger.Error("GetKeys: System failure fetching keys", "err", err)
+		response.WriteJSONError(w, http.StatusInternalServerError, "Internal system error")
 		return
 	}
 
-	// 3. Respond: Encode the native struct directly using standard json.
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(retrievedKeys); err != nil {
 		logger.Error("GetKeys: Failed to marshal keys to JSON", "err", err)

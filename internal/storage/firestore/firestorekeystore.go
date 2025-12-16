@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/tinywideclouds/go-key-service/pkg/keystore"
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
 	urn "github.com/tinywideclouds/go-platform/pkg/net/v1"
 )
@@ -62,23 +63,27 @@ func (s *Store) StorePublicKeys(ctx context.Context, entityURN urn.URN, keys key
 
 // GetPublicKeys retrieves a PublicKeys struct from a Firestore document.
 // It returns an error if the document is not found or cannot be parsed.
+// GetPublicKeys retrieves a PublicKeys struct from a Firestore document.
 func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.PublicKeys, error) {
 	entityKey := entityURN.String()
 	s.logger.Debug("Getting keys", "key", entityKey)
 
 	doc, err := s.collection.Doc(entityKey).Get(ctx)
 	if err != nil {
+		// ✅ FIX: specific check for NotFound
 		if status.Code(err) == codes.NotFound {
 			s.logger.Debug("Keys not found", "key", entityKey)
-			return keys.PublicKeys{}, fmt.Errorf("key for entity %s not found", entityKey)
+			// Return the Sentinel Error
+			return keys.PublicKeys{}, keystore.ErrNotFound
 		}
+
+		// Any other error is a SYSTEM failure (Cold start, Permission, Timeout)
 		s.logger.Warn("Failed to get key document", "key", entityKey, "err", err)
 		return keys.PublicKeys{}, fmt.Errorf("failed to get key for entity %s: %w", entityKey, err)
 	}
 
 	var kDoc KeyDocument
 	if err := doc.DataTo(&kDoc); err == nil {
-		// Success: Check if it's a real doc (has non-nil EncKey or SigKey)
 		if kDoc.EncKey != nil || kDoc.SigKey != nil {
 			s.logger.Debug("Successfully retrieved keys ", "key", entityKey)
 			return keys.PublicKeys{
@@ -88,6 +93,5 @@ func (s *Store) GetPublicKeys(ctx context.Context, entityURN urn.URN) (keys.Publ
 		}
 	}
 
-	// This case handles a document that exists but doesn't match our struct
 	return keys.PublicKeys{}, fmt.Errorf("failed to parse key document for entity %s: unknown format", entityKey)
 }

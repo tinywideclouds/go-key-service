@@ -52,7 +52,6 @@ func TestFirestoreStore_Integration(t *testing.T) {
 	ctx, _, store := setupSuite(t)
 
 	// Arrange
-	// --- FIX: Corrected argument order for urn.New ---
 	userURN, err := urn.New(urn.SecureMessaging, "user", "user-123")
 	require.NoError(t, err)
 
@@ -70,9 +69,12 @@ func TestFirestoreStore_Integration(t *testing.T) {
 	assert.Equal(t, testKeys, retrievedKeys)
 
 	// Act & Assert: Get non-existent key
-	// --- FIX: Corrected argument order for urn.New ---
 	nonExistentURN, err := urn.New(urn.SecureMessaging, "user", "not-found")
 	require.NoError(t, err)
+
 	_, err = store.GetPublicKeys(ctx, nonExistentURN)
-	assert.Error(t, err)
+
+	// ✅ VERIFICATION: Must return the specific sentinel error
+	require.Error(t, err)
+	assert.ErrorIs(t, err, keystore.ErrNotFound, "Expected keystore.ErrNotFound when key is missing in Firestore")
 }

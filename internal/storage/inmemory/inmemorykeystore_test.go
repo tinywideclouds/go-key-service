@@ -44,6 +44,10 @@ func TestInMemoryStore_Integration(t *testing.T) {
 	// Act & Assert: Get non-existent key
 	nonExistentURN, err := urn.New(urn.SecureMessaging, "user", "not-found")
 	require.NoError(t, err)
+
 	_, err = store.GetPublicKeys(ctx, nonExistentURN)
-	assert.Error(t, err)
+
+	// ✅ VERIFICATION: Must return the specific sentinel error
+	require.Error(t, err)
+	assert.ErrorIs(t, err, keystore.ErrNotFound, "Expected keystore.ErrNotFound when key is missing")
 }

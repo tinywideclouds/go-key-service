@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/tinywideclouds/go-key-service/internal/api"
+	"github.com/tinywideclouds/go-key-service/pkg/keystore"
 	"github.com/tinywideclouds/go-microservice-base/pkg/middleware"
 	"github.com/tinywideclouds/go-platform/pkg/keys/v1"
 	urn "github.com/tinywideclouds/go-platform/pkg/net/v1"
@@ -55,31 +57,23 @@ func TestStoreKeysHandler(t *testing.T) {
 	bodyBytes, _ := json.Marshal(validBody)
 
 	t.Run("Allow write to Identity URN (Standard)", func(t *testing.T) {
-		// Setup: User is logged in as 'identityURN', has handle 'lookupURN'
-		// Target: 'identityURN'
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+identityURN, bytes.NewBuffer(bodyBytes))
 		ctx := middleware.ContextWithUser(req.Context(), identityURN, lookupURN, "")
 		req = req.WithContext(ctx)
-		// Add PathValue (Go 1.22 feature)
 		req.SetPathValue("entityURN", identityURN)
 
 		w := httptest.NewRecorder()
 
-		// Expectation
 		targetObj, _ := urn.Parse(identityURN)
 		mockStore.On("StorePublicKeys", mock.Anything, targetObj, validBody).Return(nil).Once()
 
-		// Act
 		handler.StoreKeysHandler(w, req)
 
-		// Assert
 		assert.Equal(t, http.StatusCreated, w.Code)
 		mockStore.AssertExpectations(t)
 	})
 
 	t.Run("Allow write to Lookup URN (The 'Handle' Feature)", func(t *testing.T) {
-		// Setup: User is logged in as 'identityURN', has handle 'lookupURN'
-		// Target: 'lookupURN' (Attempting to claim their public address)
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+lookupURN, bytes.NewBuffer(bodyBytes))
 		ctx := middleware.ContextWithUser(req.Context(), identityURN, lookupURN, "")
 		req = req.WithContext(ctx)
@@ -87,21 +81,16 @@ func TestStoreKeysHandler(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		// Expectation
 		targetObj, _ := urn.Parse(lookupURN)
 		mockStore.On("StorePublicKeys", mock.Anything, targetObj, validBody).Return(nil).Once()
 
-		// Act
 		handler.StoreKeysHandler(w, req)
 
-		// Assert
 		assert.Equal(t, http.StatusCreated, w.Code)
 		mockStore.AssertExpectations(t)
 	})
 
 	t.Run("Forbid write to Unmatched URN", func(t *testing.T) {
-		// Setup: User is 'identityURN'
-		// Target: 'otherURN' (Stranger)
 		req := httptest.NewRequest(http.MethodPost, "/keys/"+otherURN, bytes.NewBuffer(bodyBytes))
 		ctx := middleware.ContextWithUser(req.Context(), identityURN, lookupURN, "")
 		req = req.WithContext(ctx)
@@ -109,11 +98,73 @@ func TestStoreKeysHandler(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		// Act
 		handler.StoreKeysHandler(w, req)
 
-		// Assert
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		mockStore.AssertNotCalled(t, "StorePublicKeys")
+	})
+}
+
+// ✅ NEW: Test Suite for the Regression Fix
+func TestGetKeysHandler(t *testing.T) {
+	// Fixtures
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mockStore := new(MockStore)
+	handler := &api.API{
+		Store:  mockStore,
+		Logger: logger,
+	}
+
+	validURN := "urn:auth:google:user-123"
+	urnObj, _ := urn.Parse(validURN)
+
+	validKeys := keys.PublicKeys{EncKey: []byte("enc"), SigKey: []byte("sig")}
+
+	t.Run("Returns 200 OK with keys when found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/keys/"+validURN, nil)
+		req.SetPathValue("entityURN", validURN)
+		w := httptest.NewRecorder()
+
+		mockStore.On("GetPublicKeys", mock.Anything, urnObj).Return(validKeys, nil).Once()
+
+		handler.GetKeysHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Optional: Check body content
+		var respKeys keys.PublicKeys
+		_ = json.NewDecoder(w.Body).Decode(&respKeys)
+		assert.Equal(t, validKeys, respKeys)
+
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("Returns 404 Not Found when store returns ErrNotFound", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/keys/"+validURN, nil)
+		req.SetPathValue("entityURN", validURN)
+		w := httptest.NewRecorder()
+
+		// ✅ VERIFY: Sentinel Error mapping
+		mockStore.On("GetPublicKeys", mock.Anything, urnObj).Return(keys.PublicKeys{}, keystore.ErrNotFound).Once()
+
+		handler.GetKeysHandler(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("Returns 500 Internal Server Error when store fails generically", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/keys/"+validURN, nil)
+		req.SetPathValue("entityURN", validURN)
+		w := httptest.NewRecorder()
+
+		// ✅ VERIFY: Generic Error mapping (The Startup Regression Fix)
+		// We simulate a DB connection error here
+		mockStore.On("GetPublicKeys", mock.Anything, urnObj).Return(keys.PublicKeys{}, errors.New("connection refused")).Once()
+
+		handler.GetKeysHandler(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		mockStore.AssertExpectations(t)
 	})
 }
